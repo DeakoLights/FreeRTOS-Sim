@@ -281,8 +281,16 @@ void vPortYieldFromISR( void )
 }
 /*-----------------------------------------------------------*/
 
+sigset_t og_sig;
+
 void vPortEnterCritical( void )
 {
+	sigset_t set;
+	sigemptyset(&set);
+	sigaddset(&set, SIGALRM);
+	sigaddset(&set, SIGIO);
+	sigprocmask(SIG_SETMASK, &set, &og_sig);
+
 	vPortDisableInterrupts();
 	uxCriticalNesting++;
 }
@@ -290,6 +298,9 @@ void vPortEnterCritical( void )
 
 void vPortExitCritical( void )
 {
+	sigprocmask(SIG_SETMASK, &og_sig, NULL);
+
+
 	/* Check for unmatched exits. */
 	if ( uxCriticalNesting > 0 )
 	{
