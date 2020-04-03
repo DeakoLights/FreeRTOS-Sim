@@ -4555,6 +4555,80 @@ TickType_t uxReturn;
 		return xReturn;
 	}
 
+	BaseType_t xTaskNotifyWaitWithoutStateClear( uint32_t ulBitsToClearOnEntry, uint32_t ulBitsToClearOnExit, uint32_t *pulNotificationValue, TickType_t xTicksToWait )
+	{
+	BaseType_t xReturn;
+
+		taskENTER_CRITICAL();
+		{
+			/* Only block if a notification is not already pending. */
+			if( pxCurrentTCB->ucNotifyState != taskNOTIFICATION_RECEIVED )
+			{
+				/* Clear bits in the task's notification value as bits may get
+				set	by the notifying task or interrupt.  This can be used to
+				clear the value to zero. */
+				pxCurrentTCB->ulNotifiedValue &= ~ulBitsToClearOnEntry;
+
+				/* Mark this task as waiting for a notification. */
+				pxCurrentTCB->ucNotifyState = taskWAITING_NOTIFICATION;
+
+				if( xTicksToWait > ( TickType_t ) 0 )
+				{
+					prvAddCurrentTaskToDelayedList( xTicksToWait, pdTRUE );
+					traceTASK_NOTIFY_WAIT_BLOCK();
+
+					/* All ports are written to allow a yield in a critical
+					section (some will yield immediately, others wait until the
+					critical section exits) - but it is not something that
+					application code should ever do. */
+					portYIELD_WITHIN_API();
+				}
+				else
+				{
+					mtCOVERAGE_TEST_MARKER();
+				}
+			}
+			else
+			{
+				mtCOVERAGE_TEST_MARKER();
+			}
+		}
+		taskEXIT_CRITICAL();
+
+		taskENTER_CRITICAL();
+		{
+			traceTASK_NOTIFY_WAIT();
+
+			if( pulNotificationValue != NULL )
+			{
+				/* Output the current notification value, which may or may not
+				have changed. */
+				*pulNotificationValue = pxCurrentTCB->ulNotifiedValue;
+			}
+
+			/* If ucNotifyValue is set then either the task never entered the
+			blocked state (because a notification was already pending) or the
+			task unblocked because of a notification.  Otherwise the task
+			unblocked because of a timeout. */
+			if( pxCurrentTCB->ucNotifyState != taskNOTIFICATION_RECEIVED )
+			{
+				/* A notification was not received. */
+				xReturn = pdFALSE;
+			}
+			else
+			{
+				/* A notification was already pending or a notification was
+				received while the task was waiting. */
+				pxCurrentTCB->ulNotifiedValue &= ~ulBitsToClearOnExit;
+				xReturn = pdTRUE;
+			}
+
+		}
+		taskEXIT_CRITICAL();
+
+		return xReturn;
+	}
+
 #endif /* configUSE_TASK_NOTIFICATIONS */
 /*-----------------------------------------------------------*/
 
